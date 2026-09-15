@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+.vite/
+.npm-cache/
+*.log
+_js-output.pdf
+e2e-output.pdf
+_shot-*.png
+
+# 测试时如需放入私密样张
+test/private/
