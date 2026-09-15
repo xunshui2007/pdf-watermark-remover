@@ -1,6 +1,6 @@
 # PDF 去水印工具（纯浏览器端）
 
-在线站点：`https://<你的用户名>.github.io/pdf-watermark-remover/`
+**在线站点：<https://xunshui2007.github.io/pdf-watermark-remover/>**
 
 精准移除 PDF 里的**水印标记内容**（`/Artifact <</Subtype/Watermark>> BDC … EMC`），
 图纸线条、位号丝印、隐藏 OCR 文字层、字体全部原样保留。
@@ -42,7 +42,8 @@ EMC
 | 与原件渲染比对 | 最大像素差 34/255，**超阈值(40)像素 0 个**（仅抗锯齿噪声） |
 | 文字层 | 第 1 页 3523 字符、第 2 页 18372 字符，完全一致 |
 | 与 Python 参考实现比对 | **逐像素 0 差异**（652.8 万像素/页全等） |
-| 浏览器端到端 | 真实 Edge 无头驱动页面完成处理、预览、下载，产物与参考实现逐像素一致 |
+| 浏览器端到端（本地 dist） | 真实 Edge 无头驱动页面完成处理、预览、下载，产物与参考实现逐像素一致 |
+| 浏览器端到端（线上 Pages） | 同样流程在 <https://xunshui2007.github.io/pdf-watermark-remover/> 上跑通，产物与参考实现逐像素 0 差异 |
 
 ## 快速开始
 
@@ -58,8 +59,12 @@ npm run preview      # 预览构建产物
 
 ```bash
 npm run build
-node scripts/e2e-smoke.mjs "样本.pdf" e2e-output.pdf
+node scripts/e2e-smoke.mjs "样本.pdf" e2e-output.pdf                      # 测本地 dist
+node scripts/e2e-smoke.mjs "样本.pdf" e2e-live.pdf --site https://xunshui2007.github.io/pdf-watermark-remover/
 ```
+
+> 说明：本机到 `github.com:443` 的 git 传输被网络阻断（`api.github.com` 可用），
+> 因此仓库内容通过 `scripts/upload-via-api.ps1` 走 GitHub REST Contents API 上传。
 
 命令行跑真实文件（无需浏览器）：
 
@@ -79,7 +84,8 @@ test/removeWatermark.test.ts 语法层 + 合成夹具 + 真实样本结构回归
 test/realSample.test.ts      结构校验 + 与 Python 参考实现逐像素比对
 tools/compare_pdfs.py        任意两份 PDF 的渲染/文字等价校验
 tools/pixels.py              页面渲染成原始 RGB（供 Node 侧比对）
-scripts/e2e-smoke.mjs        CDP 驱动的浏览器端到端冒烟测试
+scripts/e2e-smoke.mjs        CDP 驱动的浏览器端到端冒烟测试（支持 --site 测线上地址）
+scripts/upload-via-api.ps1   走 GitHub REST API 上传仓库内容（git 端口被阻断时的备用通道）
 scripts/run-sample.mjs       命令行批量处理入口
 ```
 
