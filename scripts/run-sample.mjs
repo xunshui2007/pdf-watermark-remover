@@ -1,6 +1,6 @@
 /**
  * 用真实 PDF 跑一遍完整流水线并把产物落盘，便于用其它工具离线校验。
- * 用法：node scripts/run-sample.mjs <输入.pdf> <输出.pdf>
+ * 用法：node scripts/run-sample.mjs <输入.pdf> [输出.pdf]
  */
 import { buildSync } from 'esbuild'
 import { spawnSync } from 'node:child_process'
@@ -11,7 +11,11 @@ import { fileURLToPath } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.join(here, '..')
-const src = process.argv[2] ?? 'F:/数字化连接/2GB013_V1.01_位号图(260914).pdf'
+const src = process.argv[2]
+if (!src || !fs.existsSync(src)) {
+  console.error('用法：node scripts/run-sample.mjs <输入.pdf> [输出.pdf]')
+  process.exit(2)
+}
 const dst = process.argv[3] ?? path.join(root, '_js-output.pdf')
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pdfwm-run-'))
