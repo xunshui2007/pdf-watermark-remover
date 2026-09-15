@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDF 去水印工具 · 纯浏览器端</title>
+    <meta
+      name="description"
+      content="在浏览器本地精准移除 PDF 水印（Watermark 标记内容），文件不上传服务器，图纸内容与文字层完整保留。"
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231f6feb'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='sans-serif'%3EP%3C/text%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <div class="brand">
+          <span class="brand-mark">PDF</span>
+          <div>
+            <h1>PDF 去水印工具</h1>
+            <p class="sub">精准删除 Watermark 标记内容 · 文件全程留在本机</p>
+          </div>
+        </div>
+        <a class="gh-link" id="repoLink" href="#" target="_blank" rel="noreferrer">源码 / 说明</a>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="card" id="dropZone" aria-label="文件选择区">
+        <input type="file" id="fileInput" accept="application/pdf,.pdf" multiple hidden />
+        <div class="drop-inner">
+          <div class="drop-icon" aria-hidden="true">＋</div>
+          <p class="drop-title">把 PDF 拖到这里，或 <button type="button" class="link-btn" id="browseBtn">选择文件</button></p>
+          <p class="drop-hint">支持一次选择多个文件；全部处理都在浏览器内完成，不会上传任何内容。</p>
+        </div>
+      </section>
+
+      <section class="card privacy" id="privacyNote">
+        <strong>为什么不上传？</strong>
+        <span>
+          去水印直接在浏览器里解析 PDF 二进制并改写内容流（pdf-lib），
+          水印图像与图层引用一并清除；页面不会向任何服务器发送文件。
+        </span>
+      </section>
+
+      <section id="results" class="results" hidden></section>
+
+      <section class="card limits">
+        <h2>适用范围与限制</h2>
+        <ul>
+          <li>针对 Adobe / ClibPDF / PADS 这类把水印写成 <code>/Artifact &lt;&lt;/Subtype/Watermark&gt;&gt; BDC … EMC</code> 标记内容的 PDF（含「试用水印」这类图片水印）。</li>
+          <li>只删除水印标记内容与水印资源，绘图、位号丝印、隐藏 OCR 文字层、字体全部原样保留。</li>
+          <li>不含水印的 PDF 会原样返回（输出与输入字节一致）；水印被压平进图纸内容的扫描件无法用本工具处理。</li>
+          <li>内容流过滤器仅支持 FlateDecode / 无过滤器，其他编码会明确报告为「跳过」，不会盲目改写。</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <span id="footerNote">纯前端实现 · 无需上传 · 可离线使用</span>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
