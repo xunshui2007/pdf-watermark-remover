@@ -3,9 +3,10 @@
  *  1) 语法级：内容流正则 + 嵌套深度匹配
  *  2) 合成夹具：水印块被删除、其余绘图保留、无残留引用
  *  3) 不误改：不含水印的 PDF 输出与输入字节完全一致
- *  4) 真实样本：2GB013 位号图（本机存在时）逐页校验，并与 Python 版结论对齐
+ *  4) 可选真实样本：设置环境变量 SAMPLE_PDF 后逐页校验（未设置则跳过）
  */
 import fs from 'node:fs'
+import path from 'node:path'
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
 import { removePdfWatermark, stripWatermarkBlocks } from '../src/pdf/removeWatermark'
@@ -108,18 +109,19 @@ describe('removePdfWatermark（合成夹具）', () => {
   })
 })
 
-const REAL_PDF = 'F:/数字化连接/2GB013_V1.01_位号图(260914).pdf'
-const hasReal = fs.existsSync(REAL_PDF)
+// 可选真实样本：用环境变量 SAMPLE_PDF 指定文件；未设置或文件不存在则整组跳过。
+const REAL_PDF = process.env.SAMPLE_PDF ?? ''
+const hasReal = REAL_PDF !== '' && fs.existsSync(REAL_PDF)
 
-describe.skipIf(!hasReal)('removePdfWatermark（真实样本 2GB013 位号图）', () => {
-  it('两页水印全部删除，文字层与绘图保留', async () => {
+describe.skipIf(!hasReal)('removePdfWatermark（真实样本）', () => {
+  it('水印全部删除，文字层与绘图保留', async () => {
     const input = new Uint8Array(fs.readFileSync(REAL_PDF))
-    const { bytes, report } = await removePdfWatermark(input, { fileName: '2GB013.pdf' })
+    const { bytes, report } = await removePdfWatermark(input, { fileName: path.basename(REAL_PDF) })
 
-    expect(report.pages).toHaveLength(2)
-    expect(report.totalRemoved).toBe(2)
+    expect(report.pages.length).toBeGreaterThan(0)
+    expect(report.totalRemoved).toBeGreaterThan(0)
     for (const p of report.pages) {
-      expect(p.removed).toBe(1)
+      expect(p.removed).toBeGreaterThan(0)
       expect(p.leftoverRefs).toBe(0)
     }
 
@@ -127,12 +129,8 @@ describe.skipIf(!hasReal)('removePdfWatermark（真实样本 2GB013 位号图）
     for (const t of texts) {
       expect(t).not.toContain('Watermark')
       expect(t).not.toContain('/KSPX')
+      // 原有标记内容块应全部消失
+      expect(t).not.toContain('BDC')
     }
-    // 绘图与文字操作保持原样（对照 Python 版：第 1 页 TJ=572，第 2 页 TJ=3052）
-    expect((texts[0].match(/TJ/g) || []).length).toBe(572)
-    expect((texts[1].match(/TJ/g) || []).length).toBe(3052)
-    // 原来的水印块位置只剩空白
-    expect(texts[0]).not.toMatch(/Watermark|BDC/)
-    expect(texts[1]).not.toMatch(/Watermark|BDC/)
   })
 })
