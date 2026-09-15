@@ -1,0 +1,24 @@
+{
+  "name": "pdf-watermark-remover",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "纯浏览器端 PDF 水印移除工具：精准删除 Watermark 标记内容，文件不上传服务器。",
+  "scripts": {
+    "postinstall": "node scripts/copy-pdfjs-worker.mjs",
+    "dev": "vite",
+    "build": "node scripts/copy-pdfjs-worker.mjs && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^4.8.69"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}
