@@ -6,7 +6,7 @@ dist/
 .npm-cache/
 *.log
 _js-output.pdf
-e2e-output.pdf
+e2e-*.pdf
 _shot-*.png
 
 # 测试时如需放入私密样张
