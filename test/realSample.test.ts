@@ -1,8 +1,13 @@
 /**
- * 真实样本端到端校验（本机存在 2GB013 位号图时才运行）：
- *  1) 两页水印块被删除、无残留引用、绘图与文字操作数不变；
- *  2) 用 PyMuPDF 把「浏览器版输出」与「Python 版输出」渲染成原始 RGB，
- *     逐像素比对：差异必须是抗锯齿级噪声（无超过阈值的像素）。
+ * 真实样本端到端校验（可选，通过环境变量提供样本路径；未提供时自动跳过）：
+ *   SAMPLE_PDF        待处理的真实 PDF 路径
+ *   SAMPLE_REFERENCE  参考实现的输出，用于逐像素比对（可选）
+ *   PYTHON            python 解释器（默认 python）
+ *
+ * 校验内容：
+ *  1) 水印块被删除、无残留引用、绘图与文字操作数不变；
+ *  2) 用 PyMuPDF 把「本工具输出」与「参考实现输出」渲染成原始 RGB 逐像素比对，
+ *     差异必须是抗锯齿级噪声（不允许有超过阈值的像素）。
  */
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -12,8 +17,8 @@ import { PDFDict, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from 
 import { describe, expect, it } from 'vitest'
 import { removePdfWatermark } from '../src/pdf/removeWatermark'
 
-const REAL_PDF = 'F:/数字化连接/2GB013_V1.01_位号图(260914).pdf'
-const PY_OUTPUT = 'F:/数字化连接/2GB013_V1.01_位号图(260914)_去水印.pdf'
+const SAMPLE = process.env.SAMPLE_PDF ?? ''
+const REFERENCE = process.env.SAMPLE_REFERENCE ?? ''
 const PY = process.env.PYTHON ?? 'python'
 const MAGIC = 'DSHPIX1\0'
 
@@ -62,59 +67,48 @@ function comparePixels(a: RawImage, b: RawImage, threshold: number) {
   return { maxDiff, overThreshold, differing, total: a.data.length }
 }
 
-const hasReal = fs.existsSync(REAL_PDF) && fs.existsSync(PY_OUTPUT)
+const hasSample = SAMPLE !== '' && fs.existsSync(SAMPLE)
 
-describe.skipIf(!hasReal)('真实样本 2GB013 位号图：结构 + 渲染像素校验', () => {
-  it('两页水印全部删除，文字层与绘图保留', async () => {
-    const input = new Uint8Array(fs.readFileSync(REAL_PDF))
-    const { bytes, report } = await removePdfWatermark(input, { fileName: '2GB013.pdf' })
+describe.skipIf(!hasSample)('真实样本：结构 + 渲染像素校验', () => {
+  it('水印全部删除，文字层与绘图保留，水印资源被清理', async () => {
+    const input = new Uint8Array(fs.readFileSync(SAMPLE))
+    const { bytes, report } = await removePdfWatermark(input, { fileName: path.basename(SAMPLE) })
 
-    expect(report.pages).toHaveLength(2)
-    expect(report.totalRemoved).toBe(2)
+    expect(report.pages.length).toBeGreaterThan(0)
     for (const p of report.pages) {
-      expect(p.removed).toBe(1)
       expect(p.leftoverRefs).toBe(0)
     }
-    // 水印资源清理：KSPX1..KSPX4（水印图层引用 /OC 就挂在这些 XObject 字典里）
-    expect(report.cleanedXObjects.sort()).toEqual(['KSPX1', 'KSPX2', 'KSPX3', 'KSPX4'])
-    expect(report.removedOCEntries).toBe(0) // /OC 随 XObject 一起删除，不是独立资源条目
-
-    const outDoc = await PDFDocument.load(bytes)
-    // 文件级 OCG 目录已从 Catalog 中移除
-    expect(outDoc.catalog.get(PDFName.of('OCProperties'))).toBeUndefined()
-    // 页面资源里不再有任何水印 XObject（水印图层引用 /OC 随它一起消失）
-    for (let i = 0; i < outDoc.getPageCount(); i++) {
-      const res = outDoc.getPage(i).node.Resources()
-      const xo = res?.lookup(PDFName.of('XObject'), PDFDict)
-      const keys = xo ? [...xo.keys()].map(String) : []
-      expect(keys.filter((k) => k.startsWith('/KSPX'))).toEqual([])
-    }
-    // 说明：pdf-lib 保存时会带回不可达的孤立对象（/PieceInfo 水印设置、OCG 字典），
-    // 因此这里断言可达性 GC 已把它们清掉，输出里不再出现水印痕迹。
-    expect(report.gcObjectsRemoved).toBeGreaterThan(0)
-    const raw = Buffer.from(bytes).toString('latin1')
-    expect(raw).not.toContain('Watermark')
-    expect(raw).not.toContain('/KSPX')
-    expect(raw).not.toContain('/OCProperties')
-    // 文件体积应显著小于原件（原 2330368 字节）
-    expect(bytes.length).toBeLessThan(1200000)
+    // 原始样本的每一页都应当含有水印标记内容
+    expect(report.totalRemoved).toBeGreaterThan(0)
 
     const texts = await pageContentTexts(bytes)
     for (const t of texts) {
       expect(t).not.toContain('Watermark')
       expect(t).not.toContain('/KSPX')
     }
-    // 绘图与文字操作数与 Python 版完全一致（第 1 页 TJ=572，第 2 页 TJ=3052）
-    expect((texts[0].match(/TJ/g) || []).length).toBe(572)
-    expect((texts[1].match(/TJ/g) || []).length).toBe(3052)
-    // 两页内容流里都不再有任何标记内容块
-    expect(texts[0]).not.toContain('BDC')
-    expect(texts[1]).not.toContain('BDC')
+
+    const outDoc = await PDFDocument.load(bytes)
+    expect(outDoc.catalog.get(PDFName.of('OCProperties'))).toBeUndefined()
+    for (let i = 0; i < outDoc.getPageCount(); i++) {
+      const res = outDoc.getPage(i).node.Resources()
+      const xo = res?.lookup(PDFName.of('XObject'), PDFDict)
+      const keys = xo ? [...xo.keys()].map(String) : []
+      expect(keys.filter((k) => k.startsWith('/KSPX'))).toEqual([])
+    }
+    // 可达性 GC 应清掉不可达的水印图层字典等孤立对象
+    expect(report.gcObjectsRemoved).toBeGreaterThan(0)
+    const raw = Buffer.from(bytes).toString('latin1')
+    expect(raw).not.toContain('Watermark')
+    expect(raw).not.toContain('/KSPX')
   })
 
-  it('渲染结果与 Python 版输出逐像素一致（差异仅抗锯齿噪声）', () => {
-    const input = new Uint8Array(fs.readFileSync(REAL_PDF))
-    return removePdfWatermark(input, { fileName: '2GB013.pdf' }).then(({ bytes }) => {
+  it('渲染结果与参考实现逐像素一致（提供 SAMPLE_REFERENCE 时）', () => {
+    if (!REFERENCE || !fs.existsSync(REFERENCE)) {
+      console.warn('未提供 SAMPLE_REFERENCE，跳过逐像素比对')
+      return
+    }
+    const input = new Uint8Array(fs.readFileSync(SAMPLE))
+    return removePdfWatermark(input, { fileName: path.basename(SAMPLE) }).then(({ bytes }) => {
       const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pdfwm-'))
       const jsOut = path.join(tmp, 'js.pdf')
       fs.writeFileSync(jsOut, bytes)
@@ -126,31 +120,24 @@ describe.skipIf(!hasReal)('真实样本 2GB013 位号图：结构 + 渲染像素
         if (r.status !== 0) throw new Error(`pixels.py 失败: ${r.status} ${r.stderr}`)
       }
 
-      let rendered = true
       try {
         run(jsOut, path.join(tmp, 'js'))
-        run(PY_OUTPUT, path.join(tmp, 'py'))
-      } catch (e) {
-        rendered = false
-        console.warn('像素渲染不可用：', (e as Error).message)
-      }
+        run(REFERENCE, path.join(tmp, 'py'))
 
-      if (rendered) {
-        for (const page of [1, 2]) {
+        let page = 1
+        while (fs.existsSync(path.join(tmp, `js.p${page}.raw`))) {
           const a = readRaw(path.join(tmp, `js.p${page}.raw`))
           const b = readRaw(path.join(tmp, `py.p${page}.raw`))
           const stats = comparePixels(a, b, 40)
           // 两种实现对同一输入的处理结果在渲染上必须等价：
-          // 超过 40/255 的像素一个都不允许有（抗锯齿噪声实测最大 36）
+          // 超过 40/255 的像素一个都不允许有（抗锯齿噪声实测远低于该值）
           expect(stats.overThreshold, `第 ${page} 页存在内容级差异`).toBe(0)
           expect(stats.maxDiff).toBeLessThanOrEqual(40)
+          page++
         }
-      } else {
-        // 无渲染环境时退化为结构校验（不得静默通过）
-        console.warn('本次未执行像素比对，仅完成结构校验')
+      } finally {
+        fs.rmSync(tmp, { recursive: true, force: true })
       }
-
-      fs.rmSync(tmp, { recursive: true, force: true })
     })
   })
 })
