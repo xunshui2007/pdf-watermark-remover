@@ -1,11 +1,12 @@
 /**
  * 浏览器端到端冒烟测试（CDP 驱动，无需额外依赖）：
- *   1) 启动本地静态服务托管 dist/
+ *   1) 启动本地静态服务托管 dist/（或用 --site 指定线上地址）
  *   2) 用 Edge/Chrome 无头模式打开页面
- *   3) 通过 DOM 注入真实 PDF 并触发选择事件
+ *   3) 通过 DOM 注入 PDF 并触发选择事件
  *   4) 等待处理完成，校验报告与预览图，并把页面产出的 PDF 取回落盘
  *
- * 用法：node scripts/e2e-smoke.mjs [pdf路径] [输出路径] [--headful]
+ * 用法：node scripts/e2e-smoke.mjs <样本.pdf> [输出.pdf] [--site <url>] [--headful]
+ *   样本路径必须显式提供（仓库内不保存任何真实图纸）。
  */
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
@@ -17,7 +18,15 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.join(here, '..')
 const dist = path.join(root, 'dist')
 
-const pdfPath = process.argv[2] ?? 'F:/数字化连接/2GB013_V1.01_位号图(260914).pdf'
+const pdfPath = process.argv[2]
+if (!pdfPath) {
+  console.error('用法：node scripts/e2e-smoke.mjs <样本.pdf> [输出.pdf] [--site <url>] [--headful]')
+  process.exit(2)
+}
+if (!fs.existsSync(pdfPath)) {
+  console.error(`样本不存在：${pdfPath}`)
+  process.exit(2)
+}
 const outPath = process.argv[3] ?? path.join(root, 'e2e-output.pdf')
 const headful = process.argv.includes('--headful')
 // --site <url>：直接测线上地址（例如 GitHub Pages），不再启动本地静态服务
