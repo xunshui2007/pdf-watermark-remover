@@ -1,4 +1,10 @@
-# 一键发布到 GitHub（幂等：可反复执行）
+﻿# 一键发布到 GitHub（幂等：可反复执行）
+#
+# 注意 1：本文件必须保存为 **UTF-8 with BOM**，否则 Windows PowerShell 5.1 会按 ANSI
+#         解码中文而报语法错误。
+# 注意 2：本机到 github.com:443 的 git 传输被网络阻断，本脚本会失败；
+#         此时请改用 scripts/upload-via-api.ps1（走 api.github.com 的 Contents API）。
+#
 # 用法：powershell -ExecutionPolicy Bypass -File .\publish.ps1 [-Repo 用户名/仓库名]
 param(
     [string]$Repo = "xunshui2007/pdf-watermark-remover"
