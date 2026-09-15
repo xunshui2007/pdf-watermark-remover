@@ -32,12 +32,12 @@ EMC
 
 不含水印的 PDF 会**原样返回**（输出与输入字节完全一致），不会误改。
 
-## 本机验证结论（真实样本：2GB013_V1.01_位号图(260914).pdf，2 页）
+## 验证结论（2 页图纸样本）
 
 | 校验项 | 结果 |
 | --- | --- |
 | 水印块删除 | 2/2（每页 1 块），残留 `/KSPX` 引用 0 |
-| 水印资源清理 | `KSPX1`、`KSPX2`、`KSPX3`、`KSPX4` 全部移除 |
+| 水印资源清理 | 4 个水印 XObject 全部移除，`/OCProperties` 已清除 |
 | 可达性 GC | 清理 17 个孤立对象，文件 2.33 MB → **773 KB** |
 | 与原件渲染比对 | 最大像素差 34/255，**超阈值(40)像素 0 个**（仅抗锯齿噪声） |
 | 文字层 | 第 1 页 3523 字符、第 2 页 18372 字符，完全一致 |
@@ -50,28 +50,29 @@ EMC
 ```bash
 npm install          # 安装依赖，并自动把 pdf.js worker 复制到 public/
 npm run dev          # 本地开发（默认 http://localhost:5173/）
-npm test             # 核心逻辑 + 合成夹具 + 真实样本回归
+npm test             # 核心逻辑 + 合成夹具回归（真实样本需另设环境变量）
 npm run build        # 产出 dist/（静态站点，可直接托管）
 npm run preview      # 预览构建产物
 ```
 
-浏览器端到端冒烟测试（需要本机有 Edge/Chrome）：
+用你自己的 PDF 做回归（仓库内不保存任何真实图纸，样本路径全部由外部传入）：
 
 ```bash
+# Node 侧：结构校验（可选再比对参考实现输出，做逐像素等价）
+SAMPLE_PDF=/path/to/sample.pdf SAMPLE_REFERENCE=/path/to/reference.pdf npm test
+
+# 命令行跑一遍并落盘
+node scripts/run-sample.mjs 输入.pdf 输出.pdf
+python tools/compare_pdfs.py 输入.pdf 输出.pdf   # 渲染 + 文字层等价校验
+
+# 浏览器端到端冒烟测试（需要本机有 Edge/Chrome）
 npm run build
-node scripts/e2e-smoke.mjs "样本.pdf" e2e-output.pdf                      # 测本地 dist
-node scripts/e2e-smoke.mjs "样本.pdf" e2e-live.pdf --site https://xunshui2007.github.io/pdf-watermark-remover/
+node scripts/e2e-smoke.mjs 样本.pdf e2e-output.pdf                     # 测本地 dist
+node scripts/e2e-smoke.mjs 样本.pdf e2e-live.pdf --site https://xunshui2007.github.io/pdf-watermark-remover/
 ```
 
 > 说明：本机到 `github.com:443` 的 git 传输被网络阻断（`api.github.com` 可用），
 > 因此仓库内容通过 `scripts/upload-via-api.ps1` 走 GitHub REST Contents API 上传。
-
-命令行跑真实文件（无需浏览器）：
-
-```bash
-node scripts/run-sample.mjs 输入.pdf 输出.pdf
-python tools/compare_pdfs.py 输入.pdf 输出.pdf   # 渲染 + 文字层等价校验
-```
 
 ## 目录结构
 
