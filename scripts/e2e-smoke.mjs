@@ -20,6 +20,9 @@ const dist = path.join(root, 'dist')
 const pdfPath = process.argv[2] ?? 'F:/数字化连接/2GB013_V1.01_位号图(260914).pdf'
 const outPath = process.argv[3] ?? path.join(root, 'e2e-output.pdf')
 const headful = process.argv.includes('--headful')
+// --site <url>：直接测线上地址（例如 GitHub Pages），不再启动本地静态服务
+const siteArgIdx = process.argv.indexOf('--site')
+const siteOverride = siteArgIdx >= 0 ? process.argv[siteArgIdx + 1] : null
 
 const BROWSERS = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
@@ -57,8 +60,8 @@ const server = http.createServer((req, res) => {
 
 await new Promise((r) => server.listen(0, '127.0.0.1', r))
 const port = server.address().port
-const siteUrl = `http://127.0.0.1:${port}/`
-console.log('[e2e] 站点:', siteUrl)
+const siteUrl = siteOverride ?? `http://127.0.0.1:${port}/`
+console.log('[e2e] 站点:', siteUrl, siteOverride ? '(线上地址)' : '(本地 dist)')
 
 /* ------------------------------ 启动浏览器 ------------------------------ */
 const userDataDir = fs.mkdtempSync(path.join(process.env.TEMP ?? '/tmp', 'pdfwm-e2e-'))
@@ -135,6 +138,7 @@ await call('Page.enable')
 
 const consoleErrors = []
 const pageExceptions = []
+const netFailures = []
 ws.addEventListener('message', (ev) => {
   const msg = JSON.parse(ev.data)
   if (msg.method === 'Log.entryAdded' && msg.params.entry.level === 'error') {
@@ -146,7 +150,12 @@ ws.addEventListener('message', (ev) => {
   if (msg.method === 'Runtime.consoleAPICalled' && msg.params.type === 'error') {
     consoleErrors.push(msg.params.args.map((a) => a.value ?? a.description).join(' '))
   }
+  if (msg.method === 'Network.loadingFailed') {
+    netFailures.push(`${msg.params.type} ${msg.params.errorText}`)
+  }
 })
+
+await call('Network.enable')
 
 const evaluate = async (expression, awaitPromise = true) => {
   const r = await call('Runtime.evaluate', { expression, awaitPromise, returnByValue: true })
@@ -157,7 +166,20 @@ const evaluate = async (expression, awaitPromise = true) => {
 }
 
 await call('Page.navigate', { url: siteUrl })
-await new Promise((r) => setTimeout(r, 1200))
+
+// 等应用脚本就绪（模块可能较大；main.ts 就绪后会把 repoLink 的 href 从 '#' 改成仓库地址）
+const waitAppReady = async () => {
+  for (let i = 0; i < 120; i++) {
+    const r = await evaluate(
+      `({ href: document.getElementById('repoLink')?.getAttribute('href') ?? '', input: !!document.getElementById('fileInput') })`,
+    )
+    if (r.input && r.href && r.href !== '#') return r
+    await new Promise((r) => setTimeout(r, 500))
+  }
+  throw new Error('等待应用脚本就绪超时（JS 未加载或执行失败）')
+}
+const appReady = await waitAppReady()
+console.log('[e2e] 应用就绪:', JSON.stringify(appReady))
 
 const title = await evaluate('document.title')
 console.log('[e2e] 页面标题:', title)
@@ -183,11 +205,20 @@ await evaluate(`
 
 // 等待处理完成：徽标不再是“处理中…”
 const waitBadge = async () => {
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 240; i++) {
     const txt = await evaluate(`(document.querySelector('[data-role="status"]')?.textContent ?? '')`)
     if (txt && txt !== '处理中…') return txt
+    if (i > 0 && i % 20 === 0) {
+      const diag = await evaluate(
+        `({ cards: document.querySelectorAll('#results .card').length, ready: document.readyState })`,
+      )
+      console.log(`[e2e] 等待中… ${JSON.stringify(diag)} 网络失败=${netFailures.length}`)
+    }
     await new Promise((r) => setTimeout(r, 500))
   }
+  console.log('[e2e] 控制台错误:', consoleErrors)
+  console.log('[e2e] 页面异常:', pageExceptions)
+  console.log('[e2e] 网络失败:', netFailures.slice(0, 10))
   throw new Error('等待处理结果超时')
 }
 
